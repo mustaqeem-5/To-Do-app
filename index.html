@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Todo — TaskNow</title>
+    <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/3176/3176298.png">
+
+    <link rel="stylesheet" href="src/output.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+</head>
+
+<body class="bg-[#edf3f8] overflow-x-hidden duration-300 min-h-screen">
+
+    <nav class="bg-linear-to-r from-blue-500 to-blue-700 px-4 md:px-6 py-3 flex flex-col md:flex-row items-center justify-between gap-3 shadow-lg">
+        <div class="flex items-center gap-2 text-white">
+            <i class="fa-solid fa-list-check text-2xl"></i>
+            <h1 class="text-2xl font-semibold tracking-wide"> TaskNow </h1>
+        </div>
+
+        <div class="w-full md:max-w-xl h-12 bg-white rounded-xl flex items-center gap-2 px-4 shadow-md hover:shadow-xl duration-300">
+            <input type="text" id="taskInput" placeholder="Add a task…" class="outline-none flex-1 min-w-0 text-slate-800" maxlength="200" autocomplete="off">
+            <button type="button" id="addBtn" class="shrink-0 text-blue-600 hover:text-blue-800 font-medium text-sm flex items-center gap-1 hover:scale-105 duration-300">
+                <i class="fa-solid fa-plus"></i>
+                <span class="hidden sm:inline">Add</span>
+            </button>
+        </div>
+    </nav>
+
+    <div class="max-w-3xl mx-auto p-3 space-y-4 pb-10">
+
+        <div class="bg-white rounded-2xl p-4 shadow-sm hover:shadow-xl duration-300">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <h2 class="text-xl font-semibold text-slate-800"> My tasks </h2>
+                <div class="flex flex-wrap items-center gap-2">
+                    <button type="button" data-filter="all" class="filterBtn px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white"> All </button>
+                    <button type="button" data-filter="active" class="filterBtn px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-100 text-slate-700 hover:bg-slate-200"> Active </button>
+                    <button type="button" data-filter="completed" class="filterBtn px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-100 text-slate-700 hover:bg-slate-200"> Done </button>
+                </div>
+            </div>
+
+            <p id="stats" class="text-sm text-gray-500 mb-3"> 0 tasks · 0 left </p>
+
+            <ul id="taskList" class="space-y-2" aria-live="polite"></ul>
+
+            <p id="emptyState" class="text-center text-gray-400 py-10 text-sm"> No tasks yet. Add one above. </p>
+
+            <div id="footerActions" class="hidden mt-4 pt-4 border-t border-gray-100 flex flex-wrap justify-between gap-2">
+                <button type="button" id="clearDone" class="text-sm text-red-600 hover:text-red-800 font-medium"> Clear completed </button>
+            </div>
+        </div>
+
+        <footer class="text-center text-gray-500 text-sm py-2"> © 2026 TaskNow. Local only — tasks stay in this browser. </footer>
+    </div>
+
+    <script>
+        const STORAGE_KEY = "tasknow_todos";
+
+        const taskInput = document.getElementById("taskInput");
+        const addBtn = document.getElementById("addBtn");
+        const taskList = document.getElementById("taskList");
+        const stats = document.getElementById("stats");
+        const emptyState = document.getElementById("emptyState");
+        const footerActions = document.getElementById("footerActions");
+        const clearDone = document.getElementById("clearDone");
+        const filterBtns = document.querySelectorAll(".filterBtn");
+
+        let todos = [];
+        let filter = "all";
+
+        function load() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                todos = raw ? JSON.parse(raw) : [];
+                if (!Array.isArray(todos)) todos = [];
+            } catch {
+                todos = [];
+            }
+        }
+
+        function save() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
+        }
+
+        function uid() {
+            return crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + "-" + Math.random().toString(16).slice(2);
+        }
+
+        function applyFilter(list) {
+            if (filter === "active") return list.filter(t => !t.done);
+            if (filter === "completed") return list.filter(t => t.done);
+            return list;
+        }
+
+        function render() {
+            const visible = applyFilter(todos);
+            const left = todos.filter(t => !t.done).length;
+            const total = todos.length;
+
+            stats.textContent = `${total} task${total === 1 ? "" : "s"} · ${left} left`;
+
+            taskList.innerHTML = "";
+
+            if (total === 0) {
+                emptyState.classList.remove("hidden");
+                footerActions.classList.add("hidden");
+                clearDone.classList.toggle("hidden", true);
+                return;
+            }
+
+            emptyState.classList.add("hidden");
+
+            const hasDone = todos.some(t => t.done);
+            footerActions.classList.toggle("hidden", !hasDone);
+            clearDone.classList.toggle("hidden", !hasDone);
+
+            if (visible.length === 0) {
+                const li = document.createElement("li");
+                li.className = "text-center text-gray-400 py-6 text-sm";
+                li.textContent = filter === "active" ? "No active tasks." : filter === "completed" ? "No completed tasks yet." : "Nothing to show.";
+                taskList.appendChild(li);
+                return;
+            }
+
+            visible.forEach(t => {
+                const li = document.createElement("li");
+                li.className =
+                    "flex items-start gap-3 p-3 rounded-xl border border-gray-100 hover:bg-slate-50 hover:border-blue-100 duration-300 group";
+                li.dataset.id = t.id;
+
+                const cb = document.createElement("input");
+                cb.type = "checkbox";
+                cb.className = "mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer";
+                cb.checked = t.done;
+                cb.addEventListener("change", () => toggle(t.id));
+
+                const span = document.createElement("span");
+                span.className =
+                    "flex-1 text-slate-800 break-words " + (t.done ? "line-through text-gray-400" : "");
+                span.textContent = t.text;
+
+                const del = document.createElement("button");
+                del.type = "button";
+                del.className =
+                    "opacity-0 group-hover:opacity-100 focus:opacity-100 text-gray-400 hover:text-red-600 p-1 rounded duration-200";
+                del.setAttribute("aria-label", "Delete task");
+                del.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
+                del.addEventListener("click", () => remove(t.id));
+
+                li.appendChild(cb);
+                li.appendChild(span);
+                li.appendChild(del);
+                taskList.appendChild(li);
+            });
+        }
+
+        function addTask() {
+            const text = taskInput.value.trim();
+            if (!text) return;
+            todos.unshift({ id: uid(), text, done: false });
+            taskInput.value = "";
+            save();
+            render();
+            taskInput.focus();
+        }
+
+        function toggle(id) {
+            todos = todos.map(t => (t.id === id ? { ...t, done: !t.done } : t));
+            save();
+            render();
+        }
+
+        function remove(id) {
+            todos = todos.filter(t => t.id !== id);
+            save();
+            render();
+        }
+
+        function clearCompleted() {
+            todos = todos.filter(t => !t.done);
+            save();
+            render();
+        }
+
+        addBtn.addEventListener("click", addTask);
+        taskInput.addEventListener("keydown", e => {
+            if (e.key === "Enter") addTask();
+        });
+
+        clearDone.addEventListener("click", clearCompleted);
+
+        filterBtns.forEach(btn => {
+            btn.addEventListener("click", () => {
+                filter = btn.getAttribute("data-filter") || "all";
+                filterBtns.forEach(b => {
+                    const on = b.getAttribute("data-filter") === filter;
+                    b.classList.toggle("bg-blue-600", on);
+                    b.classList.toggle("text-white", on);
+                    b.classList.toggle("bg-slate-100", !on);
+                    b.classList.toggle("text-slate-700", !on);
+                });
+                render();
+            });
+        });
+
+        load();
+        render();
+        taskInput.focus();
+    </script>
+</body>
+
+</html>
